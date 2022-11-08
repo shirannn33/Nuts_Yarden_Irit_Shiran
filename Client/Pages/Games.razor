@@ -1,0 +1,291 @@
+﻿@page "/Games/{userId:int}"
+
+<p>@msg</p>
+@* אם קיים משתמש *@
+
+@if (currentUser != null)
+{
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="openNew">משחק חדש</MudButton>
+    @if (ShowWin)
+    {
+        @* קומפוננטה של חלון שיציג מידע *@
+
+        <InfoWin Header="@header" CloseWin="closeWin">
+            @* אם החלון הוא חלון הגדרות / הוספת משחק *@
+            @if (header == "משחק חדש" || header == "הגדרות משחק")
+            {
+                <EditForm Model=@emptyGame OnValidSubmit="add">
+                    <DataAnnotationsValidator />
+                    <MudTextField @bind-Value="@emptyGame.GameName" Label="שם המשחק" Variant="Variant.Text"></MudTextField>
+                    <ValidationMessage For="@(() => emptyGame.GameName)" />
+
+                    <MudSelect T="int" Label="זמן מוקצה למשחק" @bind-Value="emptyGame.GameTime" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+                        <MudSelectItem T="int" Value="30">30 שניות</MudSelectItem>
+                        <MudSelectItem T="int" Value="60">60 שניות</MudSelectItem>
+                        <MudSelectItem T="int" Value="90">90 שניות</MudSelectItem>
+                        <MudSelectItem T="int" Value="0">ללא הגבלת זמן</MudSelectItem>
+                    </MudSelect>
+                    <input type="submit" Value="@btnTxt" />
+
+                </EditForm>
+            }
+            else
+            {
+                @*לעשות מחיקת משחק*@
+            }
+        </InfoWin>
+    }
+    <h3>
+        המשחקים של
+        @(currentUser.FirstName + " " + currentUser.LastName)
+    </h3>
+    <MudTable Items="@currentUser.UserGames" Hover="true">
+        <HeaderContent>
+            <MudTh>שם המשחק</MudTh>
+            <MudTh>קוד המשחק</MudTh>
+            <MudTh>הגדרות</MudTh>
+            <MudTh>עריכה</MudTh>
+            <MudTh>מחיקה</MudTh>
+            <MudTh>פרסום המשחק</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="שם המשחק">@context.GameName</MudTd>
+            <MudTd DataLabel="קוד המשחק">@context.GameCode</MudTd>
+            <MudTd DataLabel="הגדרות">
+                <MudFab Color="Color.Success" Icon="@Icons.Material.Filled.Settings" Size="Size.Small" @onclick="()=>ChangeSetting(context)" />
+            </MudTd>
+            <MudTd DataLabel="עריכה">
+
+                <MudFab Color="Color.Success" Icon="@Icons.Material.Filled.Edit" Size="Size.Small" @onclick="()=>EditGame(context.ID)" />
+            </MudTd>
+            <MudTd DataLabel="מחיקה">
+                <MudFab Color="Color.Success" Icon="@Icons.Material.Filled.Delete" Size="Size.Small" @onclick="()=>activetdelet(context)" />
+            </MudTd>
+            <MudTd DataLabel="פרסום המשחק">
+                <MudCheckBox CheckedChanged="@((bool newState) => PublishGame(context))" Checked="@context.Ispublished" Color="Color.Success"></MudCheckBox>
+            </MudTd>
+
+        </RowTemplate>
+    </MudTable>
+    
+    if (isdelete == true)
+    {
+        <MudPopover Open="@isdelete">
+            <Confirmation popUpSubject="מחיקת משחק" sendConfirmation="reciveCon">
+                <p>האם אתה בטוח שאתה רוצה למחוק את המשחק:</p>
+                <p>@gameToDelete.GameName</p>
+            </Confirmation>
+        </MudPopover>
+    }
+}
+
+@code {
+    [Parameter]
+    public int userId { get; set; }
+
+    User currentUser;
+
+    Game emptyGame = new Game() { GameTime = 60 };
+    Game gameToDelete;
+
+    string msg = "";
+    string btnTxt = "הוספת משחק";
+    string header = ""; //משתנה שיגדיר מה מטרת החלון
+
+    bool ShowWin = false;
+    bool isnew = true;
+    bool isdelete = false;
+
+
+    protected async override Task OnInitializedAsync()
+    {
+        //בדיקה שתתבצע בכל עמוד
+        var getResponse = await Http.GetAsync("api/Games/" + userId);
+        if (getResponse.IsSuccessStatusCode == true)
+        {
+            currentUser = getResponse.Content.ReadFromJsonAsync<User>().Result;
+            StateHasChanged();
+        }
+        else
+        {
+            string error = getResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    private async Task PublishGame(Game selectedGame)
+    {
+        //שינוי למצב השני
+        //! - הפוך מהמצב הקודם
+        selectedGame.Ispublished = !selectedGame.Ispublished;//קריאה שתעשה עדכון לבסיס הנתונים כשעשה ריענון
+        var postResponse = await Http.PostAsJsonAsync("api/Games/Update", selectedGame);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+        if (postResponse.IsSuccessStatusCode == true)
+        {
+            //אם בסדר- מעדכן
+            Game gameFromDB = postResponse.Content.ReadFromJsonAsync<Game>().Result;
+            selectedGame = gameFromDB;
+            //פה תהיה פתיחת חלון הודעה על פרסום
+        }
+        else
+        {
+            //אם לא טוב
+            string error = postResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    private async Task add()
+    {
+        //אם זה משחק חדש
+        if (isnew == true)
+        {
+            //הגדרות למשחק
+            emptyGame.GameUser = currentUser;
+            emptyGame.UserID = currentUser.ID;
+            var postResponse = await Http.PostAsJsonAsync("api/Games", emptyGame);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+                                                                                  //אם עבר טוב
+            if (postResponse.IsSuccessStatusCode == true)
+            {
+                //קבלת התוצאות לתוך גיים
+                Game theNewGame = postResponse.Content.ReadFromJsonAsync<Game>().Result;
+                //הוספה לטבלה ומעבר לעריכה
+                currentUser.UserGames.Add(theNewGame);
+                nav.NavigateTo("./EditGame/" + theNewGame.ID.ToString());
+            }
+            else
+            {
+                //אם לא טוב
+                string error = postResponse.Content.ReadAsStringAsync().Result;
+                if (error == "User not login" || error == "Empty session")
+                {
+                    nav.NavigateTo("./");
+                }
+                else
+                {
+                    msg = "התרחשה תקלת שרת";
+                }
+            }
+        }
+        else
+        {
+            //משחק קיים
+            var postResponse = await Http.PostAsJsonAsync("api/Games/Update", emptyGame);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+
+            //אם עבר טוב
+            if (postResponse.IsSuccessStatusCode == true)
+            {
+                Game theNewGame = postResponse.Content.ReadFromJsonAsync<Game>().Result;
+                //מציאת המשחק ושמירה של המשחק החדש
+                Game findGame = currentUser.UserGames.Where(w => w.ID == theNewGame.ID).FirstOrDefault();
+                if (findGame != null)
+                {
+                    int index = currentUser.UserGames.IndexOf(findGame);
+                    currentUser.UserGames[index] = theNewGame;
+                }
+            }
+            else
+            {
+                string error = postResponse.Content.ReadAsStringAsync().Result;
+                if (error == "User not login" || error == "Empty session")
+                {
+                    nav.NavigateTo("./");
+                }
+                else
+                {
+                    msg = "התרחשה תקלת שרת";
+                }
+            }
+        }
+        emptyGame = new Game() { GameTime = 60 };
+        ShowWin = false;
+    }
+
+    private async Task DeleteGame()
+    {
+        gameToDelete.UserID = currentUser.ID;
+        var deleteRespone = await Http.DeleteAsync("api/Games/" + gameToDelete.UserID.ToString() + "/" + gameToDelete.ID.ToString());
+        if (deleteRespone.IsSuccessStatusCode == true)
+        {
+            gameToDelete = new Game();
+            await OnInitializedAsync();
+        }
+        else
+        {
+            string error = deleteRespone.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+
+                Console.WriteLine("User not login");
+            }
+            else
+            {
+                Console.WriteLine("GAME NOT FOUND");
+
+            }
+        }
+    }
+
+
+    private void EditGame(int gameID)
+    {
+        nav.NavigateTo("./EditGame/" + gameID.ToString());
+    }
+
+    private void closeWin(bool close)
+    {
+        ShowWin = false;
+    }
+
+    private void openNew()
+    {
+        //ShowWin = true;
+        //header = "משחק חדש";
+        //btnTxt = "הוספת משחק";
+        //isnew = true;
+        nav.NavigateTo("/AddingGame/" + userId);
+    }
+
+    private void ChangeSetting(Game GameToEdit)
+    {
+        emptyGame = GameToEdit;
+        ShowWin = true;
+        header = "הגדרות משחק";
+        btnTxt = "שמירת שינויים";
+        isnew = false;
+    }
+
+    private void activetdelet(Game g)
+    {
+        isdelete = true;
+        gameToDelete = new Game();
+        gameToDelete = g;
+    }
+
+    private async void reciveCon(bool b)
+    {
+        if (b)
+        {
+            isdelete = false;
+            await DeleteGame();
+        }
+        else
+        {
+            isdelete = false;
+            gameToDelete = new Game();
+        }
+    }
+}

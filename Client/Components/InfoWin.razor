@@ -1,0 +1,31 @@
+﻿
+@using Nuts_Yarden_Irit_Shiran.Shared.Entities
+
+<MudCard Outlined="true">
+    <MudFab Color="Color.Secondary" Icon="@Icons.Material.Filled.Cancel" Size="Size.Small" @onclick="Close" />
+    <MudCardHeader>
+        @Header
+    </MudCardHeader>
+    <MudCardContent>
+        <a href="C:\Users\97250\OneDrive\שולחן העבודה\NutsGame\Nuts_Yarden_Irit_Shiran\Client\Components\InfoWin.razor">C:\Users\97250\OneDrive\שולחן העבודה\NutsGame\Nuts_Yarden_Irit_Shiran\Client\Components\InfoWin.razor</a>
+        @ChildContent
+    </MudCardContent>
+
+</MudCard>
+
+
+@code {
+    [Parameter]
+    public string Header { get; set; }
+
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+    [Parameter]
+    public EventCallback<bool> CloseWin { get; set; }
+
+    void Close()
+    {
+        CloseWin.InvokeAsync(false);
+    }
+
+}

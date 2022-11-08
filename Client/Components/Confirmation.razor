@@ -1,0 +1,30 @@
+﻿<div>
+    <h3>@popUpSubject</h3>
+    @ChildContent
+</div>
+
+<input type="button" value="כן" @onclick="()=>InvokeChanges(true)" />
+<input type="button" value="לא" @onclick="()=>InvokeChanges(false)" />
+
+@code {
+    [Parameter]
+    public RenderFragment ChildContent { get; set; }
+
+    [Parameter]
+    public string popUpSubject { get; set; }
+
+    [Parameter]
+    public EventCallback<bool> sendConfirmation { get; set; }
+
+    private void InvokeChanges(bool b)
+    {
+        if (b)
+        {
+            sendConfirmation.InvokeAsync(true);
+        }
+        else
+        {
+            sendConfirmation.InvokeAsync(false);
+        }
+    }
+}

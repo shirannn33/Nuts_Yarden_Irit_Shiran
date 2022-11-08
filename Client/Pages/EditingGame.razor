@@ -1,0 +1,94 @@
+﻿@page "/EditingGame/{userId:int}/{gameId:int}"
+<h3>EditingGame</h3>
+
+<p>@msg</p>
+
+<EditForm Model=@EditGame OnValidSubmit="Edit">
+    <DataAnnotationsValidator />
+    <MudTextField @bind-Value="@EditGame.GameName" Label="שם המשחק" Variant="Variant.Text"></MudTextField>
+    <ValidationMessage For="@(() => EditGame.GameName)" />
+
+    <MudSelect T="int" Label="זמן מוקצה למשחק" @bind-Value="EditGame.GameTime" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+        <MudSelectItem T="int" Value="30">30 שניות</MudSelectItem>
+        <MudSelectItem T="int" Value="60">60 שניות</MudSelectItem>
+        <MudSelectItem T="int" Value="90">90 שניות</MudSelectItem>
+        <MudSelectItem T="int" Value="0">ללא הגבלת זמן</MudSelectItem>
+    </MudSelect>
+    <input type="submit" Value="@btnTxt" />
+
+</EditForm>
+
+@code {
+    [Parameter]
+    public int userId { get; set; }
+    [Parameter]
+    public int gameId { get; set; }
+
+    Game EditGame = new Game();
+
+    User currentUser;
+    string msg = "";
+    string btnTxt = "הוספת משחק";
+
+    protected async override Task OnInitializedAsync()
+    {
+        //בדיקה שתתבצע בכל עמוד
+        var getResponse = await Http.GetAsync("api/Games/" + userId);
+        if (getResponse.IsSuccessStatusCode == true)
+        {
+            currentUser = getResponse.Content.ReadFromJsonAsync<User>().Result;
+            var getGameRresponse= await Http.GetAsync("api/Games/byId" + gameId);
+            if (getResponse.IsSuccessStatusCode == true) {
+                EditGame= getGameRresponse.Content.ReadFromJsonAsync<Game>().Result;
+            }
+            else
+            {
+                nav.NavigateTo("/Games");
+            }
+            StateHasChanged();
+        }
+        else
+        {
+            string error = getResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    private async Task Edit (){
+        //משחק קיים
+        var postResponse = await Http.PostAsJsonAsync("api/Games/Update", EditGame);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+
+        //אם עבר טוב
+        if (postResponse.IsSuccessStatusCode == true)
+        {
+            Game theNewGame = postResponse.Content.ReadFromJsonAsync<Game>().Result;
+            //מציאת המשחק ושמירה של המשחק החדש
+            Game findGame = currentUser.UserGames.Where(w => w.ID == theNewGame.ID).FirstOrDefault();
+            if (findGame != null)
+            {
+                int index = currentUser.UserGames.IndexOf(findGame);
+                currentUser.UserGames[index] = theNewGame;
+            }
+        }
+        else
+        {
+            string error = postResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+    }
+}

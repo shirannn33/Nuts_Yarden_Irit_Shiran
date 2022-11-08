@@ -1,0 +1,46 @@
+﻿@page "/"
+@inject HttpClient http
+@inject NavigationManager nav
+
+
+<h3>התחברות</h3>
+<DataAnnotationsValidator  />
+
+<p>@msg</p>
+<MudTextField @bind-Value="inputMail" Label="כתובת מייל" Variant="Variant.Outlined"></MudTextField>
+<MudButton Variant="Variant.Filled" Color="Color.Primary" @onclick="loginUser">כניסה</MudButton>
+
+@code{
+    string inputMail = "yarden@walla.co.il";
+    string msg = "";
+    async Task loginUser()
+
+    {
+        if (string.IsNullOrEmpty(inputMail) == false)// בדיקת מייל
+        {
+            var GetResponse = await http.GetAsync("api/Users/" + inputMail);
+            if (GetResponse.IsSuccessStatusCode == true)//אישור שהמייל תקין
+            {
+                int UserId = GetResponse.Content.ReadFromJsonAsync<int>().Result;//אם המייל תקין היוזר יועבר לעמוד המשחקים
+                nav.NavigateTo("./Games/" + UserId);// הנתיב לעמוד המשחקים
+            }
+            else
+            {
+                string error = GetResponse.Content.ReadAsStringAsync().Result;//לקרוא מה שחזר מהבד ריקווסט
+                if (error == "User not found")
+                {
+                    msg = "כתובת המייל שהזנת אינה קיימת במערכת";
+
+                }
+                else
+                {
+                    msg = "התרחשה תקלת שרת";
+                }
+            }
+        }
+        else
+        {
+            msg = "יש להקליד כתובת מייל";
+        }
+    }
+}

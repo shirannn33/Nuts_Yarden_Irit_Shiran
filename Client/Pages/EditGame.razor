@@ -1,0 +1,397 @@
+﻿@page "/EditGame/{GameId:int}"
+
+@using Nuts_Yarden_Irit_Shiran.Shared.Entities
+@inject HttpClient Http
+@inject NavigationManager nav
+
+<h1>@msg</h1>
+<h3>עריכת המשחק @currentGame.GameName</h3>
+<EditForm Model="emptyQuestion" OnValidSubmit="saveQ">
+
+    <MudTextField T="string" @bind-Value="emptyQuestion.QuestText" Counter="100" MaxLength="100" Immediate="true" Validation="@(new Func<string, IEnumerable<string>>(MaxCharacters))" Label="שאלה" Variant="Variant.Text" />
+    @* תמונה *@
+    <MudButton Class="ma-2" Variant="Variant.Filled" EndIcon="@Icons.Material.Outlined.Image" Color="Color.Primary" for="FileInputID" HtmlTag="label"></MudButton>
+
+    <InputFile id="FileInputID" OnChange="UploadFile" hidden />
+
+    <img src="@emptyQuestion.QuestImg" width="150" />
+
+    @for (int i = 0; i < emptyQuestion.QuestionAnswers.Count; i++)
+    {
+        string inputId = "AnswerImg" + i.ToString();
+        <AnswerComp deleteimg="addDel" delete="delA" theAnswer="@emptyQuestion.QuestionAnswers[i]" inputId="@inputId"></AnswerComp>
+    }
+    @if (emptyQuestion.QuestionAnswers.Count < 11)
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.Add" Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" @onclick="addAnswer" />
+
+    }
+    @if (showSave == true)
+    {
+        <input type="submit" value="@buttonTXT" />
+    }
+
+    @*<MudButton Class="ma-2" Variant="Variant.Outlined" Color="Color.Primary" @onclick="()=>delQ(emptyQuestion)">מחיקה</MudButton>*@
+    <MudButton Class="ma-2" Variant="Variant.Outlined" Color="Color.Primary" @onclick="()=>delQ(emptyQuestion)">מחיקה</MudButton>
+</EditForm>
+
+<MudTable Items="currentGame.QuestList" Hover="true" Breakpoint="Breakpoint.Sm">
+    <HeaderContent>
+        <MudTh></MudTh>
+        <MudTh>עריכה</MudTh>
+        <MudTh>מחיקה</MudTh>
+    </HeaderContent>
+    <RowTemplate>
+        <MudTd DataLabel="">
+            @context.QuestText
+        </MudTd>
+        <MudTd DataLabel="עריכה">
+            <MudIconButton Icon="@Icons.Material.Filled.Edit" aria-label="edit" @onclick="(()=> editQ(context))"></MudIconButton>
+
+        </MudTd>
+        <MudTd DataLabel="מחיקה">
+            <MudIconButton Icon="@Icons.Material.Filled.Delete" aria-label="delete" @onclick="(()=> ActiveDelete(context))"></MudIconButton>
+        </MudTd>
+
+    </RowTemplate>
+</MudTable>
+
+    if (isdelete == true)
+    {
+        <MudPopover Open="@showDelete">
+            <Confirmation popUpSubject="מחיקת שאלה" sendConfirmation="reciveCon">
+                <p>האם אתה בטוח שאתה רוצה למחוק את השאלה:</p>
+                <p>@questionToDelete.QuestText</p>
+            </Confirmation>
+        </MudPopover>
+    }
+@code {
+    [Parameter]
+    public int GameId { get; set; }
+
+    Game currentGame = new Game();
+    Question emptyQuestion = new Question();
+
+
+    List<string> DeletedImages = new List<string>();
+
+    //int answerNum = 2;
+
+    string msg = "";
+    string buttonTXT = "שמירת שאלה";
+
+    bool isNew = true;
+    bool showSave = false;
+    bool showDelete = false;
+    Question questionToDelete;
+
+    long maxFileSize = 4194304;
+
+
+    protected async override Task OnInitializedAsync()
+    {
+        await newQ();
+        //בדיקה שתתבצע בכל עמוד
+        var getResponse = await Http.GetAsync("api/Questions/" + GameId);
+        if (getResponse.IsSuccessStatusCode == true)
+        {
+            currentGame = getResponse.Content.ReadFromJsonAsync<Game>().Result;
+        }
+        else
+        {
+            string error = getResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    private async Task editQ(Question qustion)
+    {
+        var getResponse = await Http.GetAsync("api/Answers/" + qustion.ID.ToString());
+        if (getResponse.IsSuccessStatusCode == true)
+        {
+            emptyQuestion = getResponse.Content.ReadFromJsonAsync<Question>().Result;
+            isNew = false;
+            buttonTXT = "שמירת שינויים";
+        }
+        else
+        {
+            string error = getResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    private async Task delFromTable(Question question)
+    {
+        var getResponse = await Http.GetAsync("api/Answers/" + question.ID.ToString());
+        if (getResponse.IsSuccessStatusCode == true)
+        {
+            isNew = false;
+            Question question2del = getResponse.Content.ReadFromJsonAsync<Question>().Result;
+            await delQ(question2del);
+            Console.WriteLine("delete");
+        }
+        else
+        {
+            string error = getResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    //מחיקת שאלה
+    private async Task delQ(Question question2del)
+    {
+        //מחיקת כל התמונות מהשאלה
+        if (string.IsNullOrEmpty(question2del.QuestImg) == false)
+        {
+            DeletedImages.Add(question2del.QuestImg);
+        }
+        foreach (Answer a in question2del.QuestionAnswers)
+        {
+            if (a.Type == "img")
+            {
+                if (string.IsNullOrEmpty(a.newanswer) == false)
+                {
+                    DeletedImages.Add(a.newanswer);
+                }
+            }
+        }
+        if (isNew == true)
+        {
+            await newQ();
+        }
+        else
+        {
+            var delResponse = await Http.DeleteAsync("api/Questions/" + question2del.ID.ToString());
+            if (delResponse.IsSuccessStatusCode == true)
+            {
+                currentGame.QuestList.RemoveAll(q => q.ID == question2del.ID);
+                await newQ();
+            }
+            else
+            {
+                string error = delResponse.Content.ReadAsStringAsync().Result;
+                if (error == "User not login" || error == "Empty session")
+                {
+                    nav.NavigateTo("./");
+                }
+                else
+                {
+                    msg = "התרחשה תקלת שרת";
+                }
+
+            }
+
+        }
+    }
+
+    private async Task UploadFile(InputFileChangeEventArgs e)
+    {
+        var imageFiles = e.GetMultipleFiles();
+        foreach (var file in imageFiles)
+        {
+            if (file.Size <= maxFileSize)
+            {
+                var buffer = new byte[file.Size];
+                await file.OpenReadStream(maxFileSize).ReadAsync(buffer);
+                var imageBase64 = Convert.ToBase64String(buffer);
+                var saveResponse = await Http.PostAsJsonAsync("api/Questions/upload", imageBase64);
+
+                if (saveResponse.IsSuccessStatusCode == true)
+                {
+                    string resizeUrl = saveResponse.Content.ReadAsStringAsync().Result;
+                    emptyQuestion.QuestImg = resizeUrl;
+                    Console.WriteLine(resizeUrl);
+                }
+            }
+        }
+    }
+
+    private async Task DeleteImage()
+    {
+        //   DeletedImages.Add(myFileImage);
+        var saveResponse = await Http.PostAsJsonAsync("api/Questions/deleteImages", DeletedImages);
+
+        if (saveResponse.IsSuccessStatusCode == true)
+        {
+            Console.WriteLine("התמונה נמחקה בהצלחה");
+            //   myFileImage = "";
+            DeletedImages = new List<string>();
+        }
+    }
+
+    private IEnumerable<string> MaxCharacters(string ch)
+    {
+        if (!string.IsNullOrEmpty(ch) && 100 < ch?.Length)
+            yield return "Max 100 characters";
+    }
+
+    void addAnswer()
+    {
+        Answer newAnswer = new Answer();
+        emptyQuestion.QuestionAnswers.Add(newAnswer);
+        if (emptyQuestion.QuestionAnswers.Count >= 5)
+            showSave = true;
+
+    }
+
+    void delA(Answer answer)
+    {
+        if (answer.Type == "img")
+            DeletedImages.Add(answer.newanswer);
+        Answer answerTODel = emptyQuestion.QuestionAnswers.Where((w) => w == answer).FirstOrDefault();
+        emptyQuestion.QuestionAnswers.Remove(answerTODel);
+
+        if (emptyQuestion.QuestionAnswers.Count < 2)
+        {
+            emptyQuestion.QuestionAnswers.Add(new Answer());
+        }
+        if (emptyQuestion.QuestionAnswers.Count < 5)
+            showSave = false;
+    }
+
+    void addDel(string del)
+    {
+        DeletedImages.Add(del);
+    }
+
+    private async Task newQ()
+    {
+        emptyQuestion = new Question();
+        Answer trueAnswer = new Answer();
+        trueAnswer.Iscorrect = true;
+        Answer falseAnswer = new Answer();
+        falseAnswer.Iscorrect = false;
+        List<Answer> answerList = new List<Answer>();
+        answerList.Add(trueAnswer);
+        answerList.Add(falseAnswer);
+        emptyQuestion.QuestionAnswers = answerList;
+        isNew = true;
+        emptyQuestion.GameID = Convert.ToInt32(GameId);
+        if (DeletedImages.Count > 0)
+            await DeleteImage();
+
+    }
+
+    private async Task saveQ()
+    {
+        msg = "2321";
+        for (int i = 0; i < emptyQuestion.QuestionAnswers.Count; i++)
+        {
+            if (string.IsNullOrEmpty(emptyQuestion.QuestionAnswers[i].newanswer))
+                emptyQuestion.QuestionAnswers.Remove(emptyQuestion.QuestionAnswers[i]);
+        }
+        if (emptyQuestion.QuestionAnswers.Count < 5)
+        {
+            msg = "לא ניתן לשמור שאלה עם פחות מ5 מסיחים";
+        }
+        else
+        {
+            List<Answer> corrects = emptyQuestion.QuestionAnswers.Where(w => w.Iscorrect == true).ToList();
+            if (corrects.Count == 0)
+                msg = "לא ניתן לשמור שאלה בעלת פחות ממסיח אחד נכון";
+            else if (corrects.Count == emptyQuestion.QuestionAnswers.Count)
+                msg = "לא ניתן לשמור שאלה בעלת פחות ממסיח אחד שגוי";
+            else
+            {
+                if (isNew == true)
+                {
+                    emptyQuestion.GameID = Convert.ToInt32(GameId);
+                    var postResponse = await Http.PostAsJsonAsync("api/Questions", emptyQuestion);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+                    if (postResponse.IsSuccessStatusCode == true)
+                    {
+                        //אם בסדר- מעדכן
+                        Question QuestionFromDB = postResponse.Content.ReadFromJsonAsync<Question>().Result;
+                        currentGame.QuestList.Add(QuestionFromDB);
+
+                        await newQ();
+                    }
+                    else
+                    {
+                        //אם לא טוב
+                        string error = postResponse.Content.ReadAsStringAsync().Result;
+                        if (error == "User not login" || error == "Empty session")
+                        {
+                            nav.NavigateTo("./");
+                        }
+                        else
+                        {
+                            msg = "התרחשה תקלת שרת";
+                        }
+                    }
+
+                }
+                else
+                {
+                    var postResponse = await Http.PostAsJsonAsync("api/Questions/update", emptyQuestion);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+                    if (postResponse.IsSuccessStatusCode == true)
+                    {
+                        //אם בסדר- מעדכן
+                        Question QuestionFromDB = postResponse.Content.ReadFromJsonAsync<Question>().Result;
+                        Question questfromlist = currentGame.QuestList.Where(w => w.ID == QuestionFromDB.ID).FirstOrDefault();
+                        int index = currentGame.QuestList.IndexOf(questfromlist);
+                        currentGame.QuestList[index] = QuestionFromDB;
+                        await newQ();
+                    }
+                    else
+                    {
+                        //אם לא טוב
+                        string error = postResponse.Content.ReadAsStringAsync().Result;
+                        if (error == "User not login" || error == "Empty session")
+                        {
+                            nav.NavigateTo("./");
+                        }
+                        else
+                        {
+                            msg = "התרחשה תקלת שרת";
+                        }
+                    }
+
+                }
+            }
+        }
+
+    }
+
+    private void ActiveDelete(Question q)
+    {
+        showDelete = true;
+        questionToDelete = new Question();
+        questionToDelete = q;
+    }
+
+    private async void reciveCon(bool b)
+    {
+        if (b)
+        {
+            showDelete = false;
+            await delFromTable(questionToDelete);
+        }
+        else
+        {
+            showDelete = false;
+            questionToDelete = new Question();
+        }
+    }
+
+}

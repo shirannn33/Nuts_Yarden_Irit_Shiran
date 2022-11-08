@@ -1,0 +1,84 @@
+﻿@page "/AddingGame/{userId:int}"
+
+<h3>AddingGame</h3>
+
+<p>@msg</p>
+
+    <EditForm Model=@newGame OnValidSubmit="add">
+        <DataAnnotationsValidator />
+        <MudTextField @bind-Value="@newGame.GameName" Label="שם המשחק" Variant="Variant.Text"></MudTextField>
+        <ValidationMessage For="@(() => newGame.GameName)" />
+
+        <MudSelect T="int" Label="זמן מוקצה למשחק" @bind-Value="newGame.GameTime" Variant="Variant.Outlined" AnchorOrigin="Origin.BottomCenter">
+            <MudSelectItem T="int" Value="30">30 שניות</MudSelectItem>
+            <MudSelectItem T="int" Value="60">60 שניות</MudSelectItem>
+            <MudSelectItem T="int" Value="90">90 שניות</MudSelectItem>
+            <MudSelectItem T="int" Value="0">ללא הגבלת זמן</MudSelectItem>
+        </MudSelect>
+        <input type="submit" Value="@btnTxt" />
+
+    </EditForm>
+
+@code {
+    [Parameter]
+    public int userId { get; set; }
+
+    Game newGame = new Game();
+
+    User currentUser;
+    string msg = "";
+    string btnTxt = "הוספת משחק";
+
+    protected async override Task OnInitializedAsync()
+    {
+        //בדיקה שתתבצע בכל עמוד
+        var getResponse = await Http.GetAsync("api/Games/" + userId);
+        if (getResponse.IsSuccessStatusCode == true)
+        {
+            currentUser = getResponse.Content.ReadFromJsonAsync<User>().Result;
+            StateHasChanged();
+        }
+        else
+        {
+            string error = getResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+
+    private async Task add()
+    {
+        //הגדרות למשחק
+        newGame.UserID = userId;
+        newGame.GameUser = currentUser;
+        var postResponse = await Http.PostAsJsonAsync("api/Games", newGame);//קח את המידע ותמיר אותו לג'ייסון, הנתיב ותוכן הקריאה
+                                                                            //אם עבר טוב
+        if (postResponse.IsSuccessStatusCode == true)
+        {
+            //קבלת התוצאות לתוך גיים
+            Game theNewGame = postResponse.Content.ReadFromJsonAsync<Game>().Result;
+            //הוספה לטבלה ומעבר לעריכה
+            currentUser.UserGames.Add(theNewGame);
+            nav.NavigateTo("./EditGame/" + theNewGame.ID.ToString());
+        }
+        else
+        {
+            //אם לא טוב
+            string error = postResponse.Content.ReadAsStringAsync().Result;
+            if (error == "User not login" || error == "Empty session")
+            {
+                nav.NavigateTo("./");
+            }
+            else
+            {
+                msg = "התרחשה תקלת שרת";
+            }
+        }
+    }
+}

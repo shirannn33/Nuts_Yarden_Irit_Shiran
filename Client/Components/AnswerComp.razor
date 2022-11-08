@@ -1,0 +1,93 @@
+﻿@using Nuts_Yarden_Irit_Shiran.Shared.Entities
+@inject HttpClient Http
+<p></p>
+<div>
+
+    <MudCheckBox @bind-Checked="@theAnswer.Iscorrect" Size="Size.Small" Color="Color.Success"></MudCheckBox>
+    @if (theAnswer.Type == "img")
+    {
+        <img src="@theAnswer.newanswer" />
+        <a href="C:\Users\97250\OneDrive\שולחן העבודה\NutsGame\Nuts_Yarden_Irit_Shiran\Client\Components\AnswerComp.razor">C:\Users\97250\OneDrive\שולחן העבודה\NutsGame\Nuts_Yarden_Irit_Shiran\Client\Components\AnswerComp.razor</a>
+    }
+    else if (theAnswer.Type == "text")
+    {
+        <MudTextField T="string" @bind-Value="theAnswer.newanswer" Counter="50" MaxLength="50" Immediate="true" Validation="@(new Func<string, IEnumerable<string>>(MaxCharacters))" Label="טקסט" Variant="Variant.Text" />
+    }
+    else
+    {
+        <MudIconButton Icon="@Icons.Material.Filled.TextFields" Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" @onclick="txt" />
+        <MudIconButton Icon="@Icons.Material.Filled.Image" Variant="Variant.Filled" Color="Color.Success" Size="Size.Small" for="@inputId" HtmlTag="label" />
+
+        <InputFile id="@inputId" OnChange="UploadFile" hidden />
+    }
+
+    <MudIconButton Icon="@Icons.Material.Filled.Delete" Variant="Variant.Outlined" Color="Color.Warning" Size="Size.Small" @onclick="delAnaswer" />
+
+</div>
+
+@code {
+
+
+
+    [Parameter]
+    public Answer theAnswer { get; set; }
+
+    [Parameter]
+    public string inputId  { get; set; }
+
+    [Parameter]
+    public EventCallback<Answer> save { get; set; }
+
+    [Parameter]
+    public EventCallback<Answer> delete { get; set; }
+
+    [Parameter]
+    public EventCallback<string> deleteimg { get; set; }
+
+    long maxFileSize = 4194304;
+
+
+    private async Task UploadFile(InputFileChangeEventArgs e)
+    {
+        var imageFiles = e.GetMultipleFiles();
+        foreach (var file in imageFiles)
+        {
+            if (file.Size <= maxFileSize)
+            {
+                var buffer = new byte[file.Size];
+                await file.OpenReadStream(maxFileSize).ReadAsync(buffer);
+                var imageBase64 = Convert.ToBase64String(buffer);
+                var saveResponse = await Http.PostAsJsonAsync("api/Questions/upload", imageBase64);
+
+                if (saveResponse.IsSuccessStatusCode == true)
+                {
+                    string resizeUrl = saveResponse.Content.ReadAsStringAsync().Result;
+                    theAnswer.newanswer = resizeUrl;
+                    theAnswer.Type = "img";
+                    Console.WriteLine(resizeUrl);
+                }
+            }
+        }
+    }
+
+    private void delAnaswer()
+    {
+        delete.InvokeAsync(theAnswer);
+    }
+
+
+    private IEnumerable<string> MaxCharacters(string ch)
+    {
+        if (!string.IsNullOrEmpty(ch) && 50 < ch?.Length)
+            yield return "Max 50 characters";
+    }
+    void txt()
+    {
+        theAnswer.Type = "text";
+    }
+    void img()
+    {
+        theAnswer.Type = "img";
+    }
+
+}
